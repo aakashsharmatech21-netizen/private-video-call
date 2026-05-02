@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 
-const SERVER = 'http://localhost:5000';
+const SERVER = 'https://private-video-call.onrender.com';
 
 const ICE_SERVERS = {
   iceServers: [
