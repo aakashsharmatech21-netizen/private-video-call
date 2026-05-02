@@ -11,12 +11,15 @@ const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
-const rooms = {}; // roomId -> [socketId, socketId]
+const rooms = {};
 
 io.on('connection', (socket) => {
 
   socket.on('join-room', (roomId) => {
     if (!rooms[roomId]) rooms[roomId] = [];
+
+    // Remove stale/disconnected sockets from room
+    rooms[roomId] = rooms[roomId].filter(id => io.sockets.sockets.has(id));
 
     if (rooms[roomId].length >= 2) {
       socket.emit('room-full');
@@ -31,12 +34,10 @@ io.on('connection', (socket) => {
     socket.emit('joined', { isInitiator });
 
     if (isInitiator) {
-      // Tell the first user to start the offer
       socket.to(roomId).emit('user-joined');
     }
   });
 
-  // WebRTC signaling relay
   socket.on('offer', ({ roomId, offer }) => {
     socket.to(roomId).emit('offer', offer);
   });
