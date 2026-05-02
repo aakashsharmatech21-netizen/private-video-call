@@ -163,7 +163,7 @@ localRef.current.srcObject = stream;
     {status === 'waiting' && <p className="text-yellow-400 animate-pulse">Waiting for the other person...</p>}
 
     {/* Always render videos so refs are always available */}
-    <div className={`grid grid-cols-2 gap-4 w-full max-w-3xl ${status === 'idle' || status === 'full' ? 'hidden' : ''}`}>
+    <div className={`grid grid-cols-2 gap-4 w-full max-w-6xl ${status === 'idle' || status === 'full' ? 'hidden' : ''}`}>
       <div className="relative">
         <video ref={localRef} autoPlay muted playsInline
           className="w-full rounded-xl bg-gray-800 aspect-video object-cover border-2 border-indigo-500" />
