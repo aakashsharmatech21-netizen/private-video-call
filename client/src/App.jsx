@@ -33,7 +33,8 @@ export default function App() {
   const localRef = useRef(null);
   const remoteRef = useRef(null);
   const localStream = useRef(null);
-
+  const [micOn, setMicOn] = useState(true);
+  const [camOn, setCamOn] = useState(true);
   const generateRoom = () => {
     const id = Math.random().toString(36).substring(2, 10).toUpperCase();
     setInputId(id);
@@ -62,6 +63,15 @@ export default function App() {
 
     return pc;
   };
+  const toggleMic = () => {
+  localStream.current.getAudioTracks().forEach(t => t.enabled = !t.enabled);
+  setMicOn(prev => !prev);
+};
+
+const toggleCam = () => {
+  localStream.current.getVideoTracks().forEach(t => t.enabled = !t.enabled);
+  setCamOn(prev => !prev);
+};
 
   const joinRoom = async () => {
     const id = inputId.trim().toUpperCase();
@@ -167,11 +177,21 @@ localRef.current.srcObject = stream;
     </div>
 
     {(status === 'waiting' || status === 'connected') && (
-      <button onClick={leaveCall}
-        className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-lg font-semibold">
-        End Call
-      </button>
-    )}
+  <div className="flex gap-4 items-center">
+    <button onClick={toggleMic}
+      className={`px-4 py-2 rounded-lg font-semibold ${micOn ? 'bg-gray-600 hover:bg-gray-500' : 'bg-red-600 hover:bg-red-500'}`}>
+      {micOn ? '🎤 Mute' : '🔇 Unmuted'}
+    </button>
+    <button onClick={leaveCall}
+      className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-lg font-semibold">
+      📵 End Call
+    </button>
+    <button onClick={toggleCam}
+      className={`px-4 py-2 rounded-lg font-semibold ${camOn ? 'bg-gray-600 hover:bg-gray-500' : 'bg-red-600 hover:bg-red-500'}`}>
+      {camOn ? '📷 Cam Off' : '📷 Cam On'}
+    </button>
+  </div>
+)}
   </div>
 );
 }
