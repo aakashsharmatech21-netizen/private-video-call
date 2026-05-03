@@ -243,7 +243,7 @@ export default function App() {
             background: '#0d0d0d', marginBottom: '1rem',
             aspectRatio: window.innerWidth < 768 ? '9/16' : '16/9'
           }}>
-            <video ref={remoteRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <video ref={remoteRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', display: status === 'connected' ? 'block' : 'none' }} />
 
             {status === 'waiting' && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
