@@ -326,10 +326,10 @@ export default function App() {
         {/* Right — Chat panel */}
         {chatOpen && (
           <div style={{
-            width: 300, flexShrink: 0, background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20,
+            width: '100%', flexShrink: 0, background: '#111118',
+            border: '1px solid #1e1e2e', borderRadius: 20,
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
-            height: window.innerWidth < 768 ? 'auto' : 500
+            height: 400, marginTop: '1rem'
           }}>
             {/* Chat header */}
             <div style={{
@@ -349,7 +349,7 @@ export default function App() {
                 <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.from === 'me' ? 'flex-end' : 'flex-start' }}>
                   <div style={{
                     maxWidth: '80%', padding: '8px 12px', borderRadius: msg.from === 'me' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-                    background: msg.from === 'me' ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.08)',
+                    background: msg.from === 'me' ? '#4f46e5' : '#1e1e2e',
                     fontSize: 13, lineHeight: 1.5
                   }}>{msg.text}</div>
                   <span style={{ fontSize: 10, color: '#475569', marginTop: 2 }}>{msg.time}</span>
@@ -367,7 +367,7 @@ export default function App() {
                 placeholder="Type a message..."
                 style={{
                   flex: 1, padding: '10px 12px', borderRadius: 10,
-                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                  background: '#1a1a2e', border: '1px solid #2e2e4e',
                   color: '#fff', fontSize: 13, outline: 'none'
                 }}
               />
