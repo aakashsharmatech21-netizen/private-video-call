@@ -221,7 +221,7 @@ export default function App() {
       )}
 
       {/* Main call layout */}
-      <div style={{ width: '100%', maxWidth: 1100, display: status === 'idle' || status === 'full' ? 'none' : 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+      <div style={{ width: '100%', maxWidth: 1100, display: status === 'idle' || status === 'full' ? 'none' : 'flex', gap: '1rem', alignItems: 'flex-start', flexDirection: window.innerWidth < 768 ? 'column' : 'row' }}>
 
         {/* Left — video */}
         <div style={{ flex: 1 }}>
@@ -240,7 +240,7 @@ export default function App() {
           {/* Remote video */}
           <div style={{
             position: 'relative', width: '100%', borderRadius: 20, overflow: 'hidden',
-            background: '#111827', marginBottom: '1rem',
+            background: '#0d0d0d', marginBottom: '1rem',
             aspectRatio: window.innerWidth < 768 ? '9/16' : '16/9'
           }}>
             <video ref={remoteRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
