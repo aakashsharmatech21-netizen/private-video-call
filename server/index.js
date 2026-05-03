@@ -14,6 +14,9 @@ const io = new Server(server, {
 const rooms = {};
 
 io.on('connection', (socket) => {
+  socket.on('chat-message', ({ roomId, message }) => {
+  socket.to(roomId).emit('chat-message', message);
+});
 
   socket.on('join-room', (roomId) => {
     if (!rooms[roomId]) rooms[roomId] = [];
