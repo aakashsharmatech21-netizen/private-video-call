@@ -139,72 +139,225 @@ localRef.current.srcObject = stream;
   };
 
  return (
-  <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4 p-4">
-    <h1 className="text-3xl font-bold tracking-tight">🔐 Private Call</h1>
+  <div style={{
+    minHeight: '100vh',
+    background: '#0a0a0f',
+    color: '#fff',
+    fontFamily: "'Inter', sans-serif",
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '1rem'
+  }}>
 
+    {/* Header */}
+    <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: '10px',
+        background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
+        borderRadius: '50px', padding: '6px 16px', marginBottom: '1rem'
+      }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366f1', animation: 'pulse 2s infinite' }} />
+        <span style={{ fontSize: 13, color: '#a5b4fc' }}>End-to-End Encrypted</span>
+      </div>
+      <h1 style={{ fontSize: 'clamp(1.8rem, 5vw, 2.8rem)', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
+        SecureCall
+      </h1>
+      <p style={{ color: '#64748b', marginTop: '0.5rem', fontSize: 14 }}>Private 1-on-1 video calls. No accounts. No tracking.</p>
+    </div>
+
+    {/* Idle screen */}
     {status === 'idle' && (
-      <div className="flex flex-col gap-3 w-full max-w-sm">
-        <button onClick={generateRoom}
-          className="bg-indigo-600 hover:bg-indigo-500 py-2 rounded-lg font-semibold">
-          Generate Room ID
+      <div style={{
+        background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 20, padding: '2rem', width: '100%', maxWidth: 400,
+        backdropFilter: 'blur(10px)'
+      }}>
+        <button onClick={generateRoom} style={{
+          width: '100%', padding: '14px', borderRadius: 12, border: 'none',
+          background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+          color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer',
+          marginBottom: '1rem', letterSpacing: '0.01em'
+        }}>
+          + Generate Room ID
         </button>
-        <input value={inputId} onChange={e => setInputId(e.target.value.toUpperCase())}
+
+        <div style={{ position: 'relative', marginBottom: '1rem' }}>
+          <div style={{
+            position: 'absolute', top: '50%', left: 0, right: 0, height: 1,
+            background: 'rgba(255,255,255,0.08)', transform: 'translateY(-50%)'
+          }} />
+          <span style={{
+            position: 'relative', background: '#0a0a0f', padding: '0 12px',
+            color: '#475569', fontSize: 13, display: 'block', textAlign: 'center', width: 'fit-content', margin: '0 auto'
+          }}>or join existing</span>
+        </div>
+
+        <input
+          value={inputId}
+          onChange={e => setInputId(e.target.value.toUpperCase())}
           placeholder="Enter Room ID"
-          className="bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-center tracking-widest text-lg" />
-        <button onClick={joinRoom}
-          className="bg-green-600 hover:bg-green-500 py-2 rounded-lg font-semibold">
-          Join / Start Call
+          style={{
+            width: '100%', padding: '14px', borderRadius: 12, boxSizing: 'border-box',
+            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+            color: '#fff', fontSize: 16, textAlign: 'center', letterSpacing: '0.15em',
+            marginBottom: '1rem', outline: 'none'
+          }}
+        />
+
+        <button onClick={joinRoom} style={{
+          width: '100%', padding: '14px', borderRadius: 12, border: '1px solid rgba(99,102,241,0.5)',
+          background: 'transparent', color: '#a5b4fc', fontSize: 15, fontWeight: 600,
+          cursor: 'pointer', letterSpacing: '0.01em'
+        }}>
+          Join Call →
         </button>
+
+        {/* Features */}
+        <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          {[['🔐', 'Encrypted'], ['👥', 'Max 2 Users'], ['⚡', 'Low Latency']].map(([icon, label]) => (
+            <div key={label} style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 20, marginBottom: 4 }}>{icon}</div>
+              <div style={{ fontSize: 11, color: '#475569' }}>{label}</div>
+            </div>
+          ))}
+        </div>
       </div>
     )}
 
-    {status === 'full' && <p className="text-red-400 text-lg">Room is full! Only 2 people allowed.</p>}
-    {status === 'waiting' && <p className="text-yellow-400 animate-pulse">Waiting for the other person...</p>}
+    {status === 'full' && (
+      <div style={{
+        background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
+        borderRadius: 12, padding: '1rem 2rem', color: '#fca5a5'
+      }}>
+        Room is full — only 2 people allowed per call.
+      </div>
+    )}
 
-    {/* Video layout - Google Meet style */}
-    <div className={`w-full max-w-6xl ${status === 'idle' || status === 'full' ? 'hidden' : ''}`}>
+    {status === 'waiting' && (
+      <div style={{
+        background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)',
+        borderRadius: 12, padding: '1rem 2rem', color: '#fcd34d', marginBottom: '1rem'
+      }}>
+        ⏳ Waiting for the other person to join...
+      </div>
+    )}
+
+    {/* Video layout */}
+    <div style={{ width: '100%', maxWidth: 1100, display: status === 'idle' || status === 'full' ? 'none' : 'block' }}>
+
+      {/* Room ID bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 12, padding: '10px 16px', marginBottom: '1rem'
+      }}>
+        <span style={{ color: '#64748b', fontSize: 13 }}>Room</span>
+        <span style={{ fontFamily: 'monospace', color: '#a5b4fc', fontWeight: 600, letterSpacing: '0.1em' }}>{roomId}</span>
+        <button
+          onClick={() => navigator.clipboard.writeText(roomId)}
+          style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 13 }}>
+          Copy
+        </button>
+      </div>
+
       {/* Remote video - large */}
-      <div className="relative w-full bg-gray-800 rounded-2xl overflow-hidden mb-3"
-        style={{ aspectRatio: window.innerWidth < 768 ? '9/16' : '16/9' }}>
-        <video ref={remoteRef} autoPlay playsInline
-          className="w-full h-full object-cover" />
-        <span className="absolute top-3 left-3 text-xs bg-black/50 px-2 py-1 rounded-full">Remote</span>
+      <div style={{
+        position: 'relative', width: '100%', borderRadius: 20, overflow: 'hidden',
+        background: '#111827', marginBottom: '1rem',
+        aspectRatio: window.innerWidth < 768 ? '9/16' : '16/9'
+      }}>
+        <video ref={remoteRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
 
-        {/* Local video - small overlay */}
-        <div className="absolute bottom-4 right-4 rounded-xl overflow-hidden border-2 border-white/30 shadow-lg"
-          style={{
-            width: window.innerWidth < 768 ? '90px' : '160px',
-            aspectRatio: window.innerWidth < 768 ? '9/16' : '16/9'
+        {status === 'waiting' && (
+          <div style={{
+            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', flexDirection: 'column', gap: 12
           }}>
-          <video ref={localRef} autoPlay muted playsInline
-            className="w-full h-full object-cover" />
-          <span className="absolute bottom-1 left-1 text-xs bg-black/50 px-1 rounded">You</span>
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%',
+              background: 'rgba(99,102,241,0.2)', border: '2px solid rgba(99,102,241,0.4)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28
+            }}>👤</div>
+            <p style={{ color: '#64748b', fontSize: 14 }}>Waiting for other person...</p>
+          </div>
+        )}
+
+        {/* Local video overlay */}
+        <div style={{
+          position: 'absolute', bottom: 16, right: 16, borderRadius: 12,
+          overflow: 'hidden', border: '2px solid rgba(255,255,255,0.2)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+          width: window.innerWidth < 768 ? 90 : 180,
+          aspectRatio: window.innerWidth < 768 ? '9/16' : '16/9'
+        }}>
+          <video ref={localRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <div style={{
+            position: 'absolute', bottom: 4, left: 6,
+            fontSize: 10, color: 'rgba(255,255,255,0.7)', background: 'rgba(0,0,0,0.4)',
+            padding: '2px 6px', borderRadius: 4
+          }}>You</div>
         </div>
+
+        {/* Status badge */}
+        {status === 'connected' && (
+          <div style={{
+            position: 'absolute', top: 16, left: 16,
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'rgba(0,0,0,0.5)', borderRadius: 50, padding: '6px 12px'
+          }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e' }} />
+            <span style={{ fontSize: 12, color: '#fff' }}>Live</span>
+          </div>
+        )}
       </div>
 
       {/* Controls */}
       {(status === 'waiting' || status === 'connected') && (
-        <div className="flex gap-4 items-center justify-center mt-2">
-          <button onClick={toggleMic}
-            className={`flex flex-col items-center px-5 py-3 rounded-xl font-semibold text-sm ${micOn ? 'bg-gray-700 hover:bg-gray-600' : 'bg-red-600 hover:bg-red-500'}`}>
-            <span className="text-xl">{micOn ? '🎤' : '🔇'}</span>
-            <span>{micOn ? 'Mute' : 'Unmute'}</span>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+          background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: 16, padding: '1rem'
+        }}>
+          <button onClick={toggleMic} style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+            padding: '12px 20px', borderRadius: 12, border: 'none', cursor: 'pointer',
+            background: micOn ? 'rgba(255,255,255,0.08)' : 'rgba(239,68,68,0.2)',
+            color: micOn ? '#fff' : '#fca5a5', fontSize: 12, fontWeight: 500
+          }}>
+            <span style={{ fontSize: 20 }}>{micOn ? '🎤' : '🔇'}</span>
+            {micOn ? 'Mute' : 'Unmute'}
           </button>
 
-          <button onClick={leaveCall}
-            className="flex flex-col items-center bg-red-600 hover:bg-red-500 px-5 py-3 rounded-xl font-semibold text-sm">
-            <span className="text-xl">📵</span>
-            <span>End</span>
+          <button onClick={toggleCam} style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+            padding: '12px 20px', borderRadius: 12, border: 'none', cursor: 'pointer',
+            background: camOn ? 'rgba(255,255,255,0.08)' : 'rgba(239,68,68,0.2)',
+            color: camOn ? '#fff' : '#fca5a5', fontSize: 12, fontWeight: 500
+          }}>
+            <span style={{ fontSize: 20 }}>{camOn ? '📷' : '🚫'}</span>
+            {camOn ? 'Cam Off' : 'Cam On'}
           </button>
 
-          <button onClick={toggleCam}
-            className={`flex flex-col items-center px-5 py-3 rounded-xl font-semibold text-sm ${camOn ? 'bg-gray-700 hover:bg-gray-600' : 'bg-red-600 hover:bg-red-500'}`}>
-            <span className="text-xl">{camOn ? '📷' : '🚫'}</span>
-            <span>{camOn ? 'Cam Off' : 'Cam On'}</span>
+          <button onClick={leaveCall} style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+            padding: '12px 28px', borderRadius: 12, border: 'none', cursor: 'pointer',
+            background: 'rgba(239,68,68,0.8)', color: '#fff', fontSize: 12, fontWeight: 600
+          }}>
+            <span style={{ fontSize: 20 }}>📵</span>
+            End Call
           </button>
         </div>
       )}
     </div>
+
+    <style>{`
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+    `}</style>
   </div>
 );
 }
