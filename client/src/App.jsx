@@ -139,7 +139,7 @@ localRef.current.srcObject = stream;
   };
 
  return (
-  <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-6 p-4">
+  <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4 p-4">
     <h1 className="text-3xl font-bold tracking-tight">🔐 Private Call</h1>
 
     {status === 'idle' && (
@@ -159,39 +159,52 @@ localRef.current.srcObject = stream;
     )}
 
     {status === 'full' && <p className="text-red-400 text-lg">Room is full! Only 2 people allowed.</p>}
-
     {status === 'waiting' && <p className="text-yellow-400 animate-pulse">Waiting for the other person...</p>}
 
-    {/* Always render videos so refs are always available */}
-    <div className={`grid grid-cols-2 gap-4 w-full max-w-6xl ${status === 'idle' || status === 'full' ? 'hidden' : ''}`}>
-      <div className="relative">
-        <video ref={localRef} autoPlay muted playsInline
-          className="w-full rounded-xl bg-gray-800 aspect-video object-cover border-2 border-indigo-500" />
-        <span className="absolute bottom-2 left-2 text-xs bg-black/50 px-2 py-0.5 rounded">You</span>
-      </div>
-      <div className="relative">
+    {/* Video layout - Google Meet style */}
+    <div className={`w-full max-w-6xl ${status === 'idle' || status === 'full' ? 'hidden' : ''}`}>
+      {/* Remote video - large */}
+      <div className="relative w-full bg-gray-800 rounded-2xl overflow-hidden mb-3"
+        style={{ aspectRatio: window.innerWidth < 768 ? '9/16' : '16/9' }}>
         <video ref={remoteRef} autoPlay playsInline
-          className="w-full rounded-xl bg-gray-800 aspect-video object-cover border-2 border-gray-600" />
-        <span className="absolute bottom-2 left-2 text-xs bg-black/50 px-2 py-0.5 rounded">Remote</span>
-      </div>
-    </div>
+          className="w-full h-full object-cover" />
+        <span className="absolute top-3 left-3 text-xs bg-black/50 px-2 py-1 rounded-full">Remote</span>
 
-    {(status === 'waiting' || status === 'connected') && (
-  <div className="flex gap-4 items-center">
-    <button onClick={toggleMic}
-      className={`px-4 py-2 rounded-lg font-semibold ${micOn ? 'bg-gray-600 hover:bg-gray-500' : 'bg-red-600 hover:bg-red-500'}`}>
-      {micOn ? '🎤 Mute' : '🔇 Unmuted'}
-    </button>
-    <button onClick={leaveCall}
-      className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-lg font-semibold">
-      📵 End Call
-    </button>
-    <button onClick={toggleCam}
-      className={`px-4 py-2 rounded-lg font-semibold ${camOn ? 'bg-gray-600 hover:bg-gray-500' : 'bg-red-600 hover:bg-red-500'}`}>
-      {camOn ? '📷 Cam Off' : '📷 Cam On'}
-    </button>
-  </div>
-)}
+        {/* Local video - small overlay */}
+        <div className="absolute bottom-4 right-4 rounded-xl overflow-hidden border-2 border-white/30 shadow-lg"
+          style={{
+            width: window.innerWidth < 768 ? '90px' : '160px',
+            aspectRatio: window.innerWidth < 768 ? '9/16' : '16/9'
+          }}>
+          <video ref={localRef} autoPlay muted playsInline
+            className="w-full h-full object-cover" />
+          <span className="absolute bottom-1 left-1 text-xs bg-black/50 px-1 rounded">You</span>
+        </div>
+      </div>
+
+      {/* Controls */}
+      {(status === 'waiting' || status === 'connected') && (
+        <div className="flex gap-4 items-center justify-center mt-2">
+          <button onClick={toggleMic}
+            className={`flex flex-col items-center px-5 py-3 rounded-xl font-semibold text-sm ${micOn ? 'bg-gray-700 hover:bg-gray-600' : 'bg-red-600 hover:bg-red-500'}`}>
+            <span className="text-xl">{micOn ? '🎤' : '🔇'}</span>
+            <span>{micOn ? 'Mute' : 'Unmute'}</span>
+          </button>
+
+          <button onClick={leaveCall}
+            className="flex flex-col items-center bg-red-600 hover:bg-red-500 px-5 py-3 rounded-xl font-semibold text-sm">
+            <span className="text-xl">📵</span>
+            <span>End</span>
+          </button>
+
+          <button onClick={toggleCam}
+            className={`flex flex-col items-center px-5 py-3 rounded-xl font-semibold text-sm ${camOn ? 'bg-gray-700 hover:bg-gray-600' : 'bg-red-600 hover:bg-red-500'}`}>
+            <span className="text-xl">{camOn ? '📷' : '🚫'}</span>
+            <span>{camOn ? 'Cam Off' : 'Cam On'}</span>
+          </button>
+        </div>
+      )}
+    </div>
   </div>
 );
 }
