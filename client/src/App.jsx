@@ -27,16 +27,17 @@ export default function App() {
   const [remoteCamOff, setRemoteCamOff] = useState(false);
   const [facingMode, setFacingMode] = useState('user');
   const [flashOn, setFlashOn] = useState(false);
+  // isSwapped: true = my video is big, remote video is small pip
   const [isSwapped, setIsSwapped] = useState(false);
 
   const socketRef = useRef(null);
   const pcRef = useRef(null);
-  const localSmallRef = useRef(null);
-  const remoteRef = useRef(null);
+  // Stable refs — always point to the same <video> elements, never reassigned
+  const localVideoRef = useRef(null);   // always the local stream
+  const remoteVideoRef = useRef(null);  // always the remote stream
   const localStream = useRef(null);
   const messagesEndRef = useRef(null);
   const currentRoomId = useRef('');
-  // FIX 1: declare chatOpenRef so socket callbacks always see latest value
   const chatOpenRef = useRef(false);
 
   useEffect(() => {
@@ -48,20 +49,20 @@ export default function App() {
     setInputId(id);
   };
 
-  const getMedia = async (facing = 'user') => {
-    if (localStream.current) {
-      return localStream.current;
-    }
+  // Attach stream to both video elements whenever stream or swap changes
+  const attachStreams = (lStream, rStream) => {
+    if (localVideoRef.current && lStream) localVideoRef.current.srcObject = lStream;
+    if (remoteVideoRef.current && rStream) remoteVideoRef.current.srcObject = rStream;
+  };
 
+  const getMedia = async (facing = 'user') => {
+    if (localStream.current) return localStream.current;
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: facing },
       audio: true
     });
-
     localStream.current = stream;
-
-    if (localSmallRef.current) localSmallRef.current.srcObject = stream;
-
+    if (localVideoRef.current) localVideoRef.current.srcObject = stream;
     return stream;
   };
 
@@ -69,7 +70,7 @@ export default function App() {
     const pc = new RTCPeerConnection(ICE_SERVERS);
     stream.getTracks().forEach(track => pc.addTrack(track, stream));
     pc.ontrack = (e) => {
-      if (remoteRef.current) remoteRef.current.srcObject = e.streams[0];
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = e.streams[0];
     };
     pc.onicecandidate = (e) => {
       if (e.candidate) socketRef.current.emit('ice-candidate', { roomId: currentRoomId.current, candidate: e.candidate });
@@ -116,9 +117,8 @@ export default function App() {
     });
     socket.on('user-left', () => {
       setStatus('waiting');
-      if (remoteRef.current) remoteRef.current.srcObject = null;
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
     });
-    // FIX 2: use chatOpenRef instead of chatOpen (stale closure fix)
     socket.on('chat-message', (msg) => {
       setMessages(prev => [...prev, { from: 'them', text: msg, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
       setUnread(prev => chatOpenRef.current ? 0 : prev + 1);
@@ -156,48 +156,80 @@ export default function App() {
         video: { facingMode },
         audio: true
       });
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      const videoSender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
+      if (videoSender) await videoSender.replaceTrack(newVideoTrack);
 
-      const newTrack = newStream.getVideoTracks()[0];
-      const sender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
+      // Keep existing audio tracks alive — only replace video
+      localStream.current.getVideoTracks().forEach(t => t.stop());
+      localStream.current.removeTrack(localStream.current.getVideoTracks()[0]);
+      localStream.current.addTrack(newVideoTrack);
 
-      if (sender) await sender.replaceTrack(newTrack);
-
-      localStream.current.getTracks().forEach(t => t.stop());
-      localStream.current = newStream;
-
-      if (localSmallRef.current) localSmallRef.current.srcObject = newStream;
-
+      if (localVideoRef.current) localVideoRef.current.srcObject = localStream.current;
       socketRef.current.emit('peer-cam', { roomId, off: false });
     }
   };
 
+  // ─── FIX 1: switchCamera ───────────────────────────────────────────────────
+  // Only replace the VIDEO track; keep the existing audio track alive so the
+  // audio sender is untouched and the peer connection stays healthy.
   const switchCamera = async () => {
     const newFacing = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(newFacing);
 
+    // Get only video from the new camera
     const newStream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: newFacing },
-      audio: true
+      audio: false          // don't grab a new mic — reuse the existing audio track
     });
 
-    const newTrack = newStream.getVideoTracks()[0];
-    const sender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
+    const newVideoTrack = newStream.getVideoTracks()[0];
 
-    if (sender) await sender.replaceTrack(newTrack);
+    // Replace the video sender in the peer connection
+    const videoSender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
+    if (videoSender) await videoSender.replaceTrack(newVideoTrack);
 
-    localStream.current.getTracks().forEach(t => t.stop());
-    localStream.current = newStream;
+    // Swap out only the old video track in localStream; keep audio
+    localStream.current.getVideoTracks().forEach(t => t.stop());
+    localStream.current.removeTrack(localStream.current.getVideoTracks()[0]);
+    localStream.current.addTrack(newVideoTrack);
 
-    if (localSmallRef.current) localSmallRef.current.srcObject = newStream;
+    // Re-attach so the local preview updates
+    if (localVideoRef.current) localVideoRef.current.srcObject = localStream.current;
   };
 
-  const toggleFlash = () => {
-    setFlashOn(prev => {
-      if (!prev) {
-        setTimeout(() => setFlashOn(false), 1500);
+  // ─── FIX 2: toggleFlash ───────────────────────────────────────────────────
+  // Use the real torch constraint on the back-camera track when available.
+  // Falls back to the screen-flash overlay on browsers that don't support it.
+  const toggleFlash = async () => {
+    const videoTrack = localStream.current?.getVideoTracks()[0];
+    if (videoTrack) {
+      const capabilities = videoTrack.getCapabilities?.() || {};
+      if (capabilities.torch) {
+        const newState = !flashOn;
+        try {
+          await videoTrack.applyConstraints({ advanced: [{ torch: newState }] });
+          setFlashOn(newState);
+          // Auto-off after 2 s when turning on
+          if (newState) setTimeout(() => {
+            videoTrack.applyConstraints({ advanced: [{ torch: false }] }).catch(() => {});
+            setFlashOn(false);
+          }, 2000);
+        } catch (e) {
+          console.warn('Torch constraint failed', e);
+          // fall through to screen flash
+          triggerScreenFlash();
+        }
+        return;
       }
-      return !prev;
-    });
+    }
+    // Fallback: white screen flash
+    triggerScreenFlash();
+  };
+
+  const triggerScreenFlash = () => {
+    setFlashOn(true);
+    setTimeout(() => setFlashOn(false), 1500);
   };
 
   const leaveCall = () => {
@@ -211,7 +243,7 @@ export default function App() {
     setChatOpen(false);
     setRemoteMuted(false);
     setRemoteCamOff(false);
-    // FIX 3: removed setLocalExpanded(false) — that state never existed
+    setIsSwapped(false);
   };
 
   const openChat = () => {
@@ -221,10 +253,15 @@ export default function App() {
 
   const isMobile = window.innerWidth < 768;
 
+  // ─── Swap helpers ─────────────────────────────────────────────────────────
+  // Big video = isSwapped ? local : remote
+  // PiP video = isSwapped ? remote : local
+  const bigIsMine = isSwapped;
+
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0f', color: '#fff', fontFamily: "'Inter', sans-serif", display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
 
-      {/* Flash overlay */}
+      {/* Screen-flash overlay (fallback when torch API unavailable) */}
       {flashOn && (
         <div style={{ position: 'fixed', inset: 0, background: 'white', zIndex: 9999, opacity: 0.95, pointerEvents: 'none', transition: 'opacity 0.3s' }} />
       )}
@@ -276,59 +313,108 @@ export default function App() {
             <button onClick={() => navigator.clipboard.writeText(roomId)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 13 }}>Copy</button>
           </div>
 
-          {/* Remote video */}
+          {/* Video stage */}
           <div style={{ position: 'relative', width: '100%', borderRadius: 20, overflow: 'hidden', background: '#0d0d0d', marginBottom: '1rem', aspectRatio: isMobile ? '9/16' : '16/9' }}>
 
-            {/* Remote cam off placeholder */}
-            {remoteCamOff ? (
+            {/* ── BIG video (fills the stage) ── */}
+            {/* Show cam-off placeholder when the big slot belongs to remote and remote has cam off */}
+            {!bigIsMine && remoteCamOff ? (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: '#111' }}>
                 <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(99,102,241,0.2)', border: '2px solid rgba(99,102,241,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>👤</div>
                 <p style={{ color: '#64748b', fontSize: 14 }}>Camera turned off</p>
               </div>
-            ) : (
-              <video
-                ref={isSwapped ? localSmallRef : remoteRef}
-                autoPlay
-                muted={isSwapped}
-                playsInline
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            )}
+            ) : bigIsMine && !camOn ? (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: '#111' }}>
+                <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(99,102,241,0.2)', border: '2px solid rgba(99,102,241,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>🚫</div>
+                <p style={{ color: '#64748b', fontSize: 14 }}>Your camera is off</p>
+              </div>
+            ) : null}
+
+            {/*
+              Both <video> elements are always mounted (stable refs).
+              We use CSS to show one as the big background and one as the small PiP.
+              localVideoRef  = always local stream
+              remoteVideoRef = always remote stream
+            */}
+            <video
+              ref={localVideoRef}
+              autoPlay muted playsInline
+              style={{
+                position: 'absolute', inset: 0,
+                width: '100%', height: '100%', objectFit: 'cover',
+                // Big when swapped, PiP when not
+                zIndex: bigIsMine ? 1 : 0,
+                display: bigIsMine ? 'block' : 'none',
+              }}
+            />
+            <video
+              ref={remoteVideoRef}
+              autoPlay playsInline
+              style={{
+                position: 'absolute', inset: 0,
+                width: '100%', height: '100%', objectFit: 'cover',
+                zIndex: bigIsMine ? 0 : 1,
+                display: bigIsMine ? 'none' : 'block',
+              }}
+            />
+
+            {/* ── PiP (small corner video) — click to swap ── */}
+            {/* FIX 3: clicking PiP swaps big/small */}
+            <div
+              onClick={() => setIsSwapped(prev => !prev)}
+              style={{
+                position: 'absolute', bottom: 16, right: 16,
+                borderRadius: 12, overflow: 'hidden',
+                border: '2px solid rgba(255,255,255,0.25)',
+                width: isMobile ? 90 : 160,
+                aspectRatio: isMobile ? '9/16' : '16/9',
+                cursor: 'pointer', zIndex: 10,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+              }}
+            >
+              {/* PiP content */}
+              {bigIsMine ? (
+                // Remote is in PiP
+                remoteCamOff ? (
+                  <div style={{ width: '100%', height: '100%', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>👤</div>
+                ) : (
+                  <video ref={remoteVideoRef} autoPlay playsInline
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                )
+              ) : (
+                // Local is in PiP
+                !camOn ? (
+                  <div style={{ width: '100%', height: '100%', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🚫</div>
+                ) : (
+                  <video ref={localVideoRef} autoPlay muted playsInline
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                )
+              )}
+              <div style={{ position: 'absolute', bottom: 4, left: 6, fontSize: 10, color: 'rgba(255,255,255,0.8)', background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: 4, pointerEvents: 'none' }}>
+                {bigIsMine ? 'Remote' : 'You'}
+              </div>
+              {/* Swap hint icon */}
+              <div style={{ position: 'absolute', top: 4, right: 6, fontSize: 12, opacity: 0.6, pointerEvents: 'none' }}>⇄</div>
+            </div>
 
             {/* Remote muted indicator */}
             {remoteMuted && (
-              <div style={{ position: 'absolute', bottom: isMobile ? 110 : 20, left: 16, background: 'rgba(239,68,68,0.8)', borderRadius: 50, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+              <div style={{ position: 'absolute', bottom: isMobile ? 110 : 20, left: 16, background: 'rgba(239,68,68,0.8)', borderRadius: 50, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, zIndex: 10 }}>
                 🔇 Muted
               </div>
             )}
 
             {/* Waiting placeholder */}
-            {status === 'waiting' && !remoteCamOff && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
+            {status === 'waiting' && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, zIndex: 5 }}>
                 <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(99,102,241,0.2)', border: '2px solid rgba(99,102,241,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>👤</div>
                 <p style={{ color: '#64748b', fontSize: 14 }}>Waiting for other person...</p>
               </div>
             )}
 
-            {/* FIX 4: local video overlay — was bare parens (invalid JSX), now a proper fragment */}
-            <div onClick={() => setIsSwapped(prev => !prev)} style={{ position: 'absolute', bottom: 16, right: 16, borderRadius: 12, overflow: 'hidden', border: '2px solid rgba(255,255,255,0.2)', width: isMobile ? 90 : 180, aspectRatio: isMobile ? '9/16' : '16/9', cursor: 'pointer' }}>
-              {!camOn ? (
-                <div style={{ width: '100%', height: '100%', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🚫</div>
-              ) : (
-                <video
-                  ref={isSwapped ? remoteRef : localSmallRef}
-                  autoPlay
-                  muted={!isSwapped}
-                  playsInline
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-              )}
-              <div style={{ position: 'absolute', bottom: 4, left: 6, fontSize: 10, color: 'rgba(255,255,255,0.7)', background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: 4 }}>You</div>
-            </div>
-
             {/* Live badge */}
             {status === 'connected' && (
-              <div style={{ position: 'absolute', top: 16, left: 16, display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.5)', borderRadius: 50, padding: '6px 12px' }}>
+              <div style={{ position: 'absolute', top: 16, left: 16, display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.5)', borderRadius: 50, padding: '6px 12px', zIndex: 10 }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e' }} />
                 <span style={{ fontSize: 12 }}>Live</span>
               </div>
@@ -343,7 +429,7 @@ export default function App() {
                 { onClick: toggleMic, active: micOn, icon: micOn ? '🎤' : '🔇', label: micOn ? 'Mute' : 'Unmute' },
                 { onClick: toggleCam, active: camOn, icon: camOn ? '📷' : '🚫', label: camOn ? 'Cam Off' : 'Cam On' },
                 { onClick: switchCamera, active: true, icon: '🔄', label: 'Flip' },
-                { onClick: toggleFlash, active: true, icon: '💡', label: 'Flash' },
+                { onClick: toggleFlash, active: flashOn, icon: '💡', label: flashOn ? 'Flash On' : 'Flash' },
               ].map(({ onClick, active, icon, label }) => (
                 <button key={label} onClick={onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 16px', borderRadius: 12, border: 'none', cursor: 'pointer', background: active ? 'rgba(255,255,255,0.08)' : 'rgba(239,68,68,0.2)', color: active ? '#fff' : '#fca5a5', fontSize: 11, fontWeight: 500 }}>
                   <span style={{ fontSize: 18 }}>{icon}</span>
