@@ -37,25 +37,38 @@ export default function App() {
   const messagesEndRef = useRef(null);
   const currentRoomId = useRef('');
   
-
+    useEffect(() => {
+      if (localStream.current) {
+        if (localSmallRef.current) {
+          localSmallRef.current.srcObject = localStream.current;
+        }
+        if (localExpandedRef.current) {
+          localExpandedRef.current.srcObject = localStream.current;
+        }
+      }
+    }, [localExpanded]);
   const generateRoom = () => {
     const id = Math.random().toString(36).substring(2, 10).toUpperCase();
     setInputId(id);
   };
 
   const getMedia = async (facing = 'user') => {
-    if (localStream.current) {
-      localStream.current.getTracks().forEach(t => t.stop());
-    }
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: facing },
-      audio: true
-    });
-    localStream.current = stream;
-    if (localSmallRef.current) localSmallRef.current.srcObject = stream;
-    if (localExpandedRef.current) localExpandedRef.current.srcObject = stream;
-    return stream;
-  };
+  if (localStream.current) {
+    return localStream.current; // ✅ reuse existing stream
+  }
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: facing },
+    audio: true
+  });
+
+  localStream.current = stream;
+
+  if (localSmallRef.current) localSmallRef.current.srcObject = stream;
+  if (localExpandedRef.current) localExpandedRef.current.srcObject = stream;
+
+  return stream;
+};
 
   const createPeer = (stream) => {
     const pc = new RTCPeerConnection(ICE_SERVERS);
@@ -145,7 +158,10 @@ export default function App() {
   const switchCamera = async () => {
     const newFacing = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(newFacing);
-    const newStream = await getMedia(newFacing);
+    const newStream = await navigator.mediaDevices.getUserMedia({
+  video: { facingMode: newFacing },
+  audio: true
+});
     if (pcRef.current) {
       const videoTrack = newStream.getVideoTracks()[0];
       const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video');
