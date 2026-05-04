@@ -13,7 +13,7 @@ const ICE_SERVERS = {
 };
 
 export default function App() {
-  
+
   const [roomId, setRoomId] = useState('');
   const [inputId, setInputId] = useState('');
   const [status, setStatus] = useState('idle');
@@ -27,6 +27,8 @@ export default function App() {
   const [remoteCamOff, setRemoteCamOff] = useState(false);
   const [facingMode, setFacingMode] = useState('user');
   const [flashOn, setFlashOn] = useState(false);
+  const [isSwapped, setIsSwapped] = useState(false);
+
   const socketRef = useRef(null);
   const pcRef = useRef(null);
   const localSmallRef = useRef(null);
@@ -34,31 +36,34 @@ export default function App() {
   const localStream = useRef(null);
   const messagesEndRef = useRef(null);
   const currentRoomId = useRef('');
-  const [isSwapped, setIsSwapped] = useState(false);
-  
-   
+  // FIX 1: declare chatOpenRef so socket callbacks always see latest value
+  const chatOpenRef = useRef(false);
+
+  useEffect(() => {
+    chatOpenRef.current = chatOpen;
+  }, [chatOpen]);
+
   const generateRoom = () => {
     const id = Math.random().toString(36).substring(2, 10).toUpperCase();
     setInputId(id);
   };
 
   const getMedia = async (facing = 'user') => {
-  if (localStream.current) {
-    return localStream.current; // ✅ reuse existing stream
-  }
+    if (localStream.current) {
+      return localStream.current;
+    }
 
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: facing },
-    audio: true
-  });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: facing },
+      audio: true
+    });
 
-  localStream.current = stream;
+    localStream.current = stream;
 
-  if (localSmallRef.current) localSmallRef.current.srcObject = stream;
-  if (localExpandedRef.current) localExpandedRef.current.srcObject = stream;
+    if (localSmallRef.current) localSmallRef.current.srcObject = stream;
 
-  return stream;
-};
+    return stream;
+  };
 
   const createPeer = (stream) => {
     const pc = new RTCPeerConnection(ICE_SERVERS);
@@ -113,9 +118,10 @@ export default function App() {
       setStatus('waiting');
       if (remoteRef.current) remoteRef.current.srcObject = null;
     });
+    // FIX 2: use chatOpenRef instead of chatOpen (stale closure fix)
     socket.on('chat-message', (msg) => {
       setMessages(prev => [...prev, { from: 'them', text: msg, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
-      setUnread(prev => chatOpen ? 0 : prev + 1);
+      setUnread(prev => chatOpenRef.current ? 0 : prev + 1);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     });
     socket.on('peer-mic', ({ muted }) => setRemoteMuted(muted));
@@ -139,17 +145,38 @@ export default function App() {
   };
 
   const toggleCam = async () => {
-  const newState = !camOn;
-  setCamOn(newState);
+    const newState = !camOn;
+    setCamOn(newState);
 
-  if (!newState) {
-    // turn off
-    localStream.current.getVideoTracks().forEach(t => t.enabled = false);
-    socketRef.current.emit('peer-cam', { roomId, off: true });
-  } else {
-    // turn ON → replace track (important)
+    if (!newState) {
+      localStream.current.getVideoTracks().forEach(t => t.enabled = false);
+      socketRef.current.emit('peer-cam', { roomId, off: true });
+    } else {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode },
+        audio: true
+      });
+
+      const newTrack = newStream.getVideoTracks()[0];
+      const sender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
+
+      if (sender) await sender.replaceTrack(newTrack);
+
+      localStream.current.getTracks().forEach(t => t.stop());
+      localStream.current = newStream;
+
+      if (localSmallRef.current) localSmallRef.current.srcObject = newStream;
+
+      socketRef.current.emit('peer-cam', { roomId, off: false });
+    }
+  };
+
+  const switchCamera = async () => {
+    const newFacing = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(newFacing);
+
     const newStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode },
+      video: { facingMode: newFacing },
       audio: true
     });
 
@@ -158,38 +185,11 @@ export default function App() {
 
     if (sender) await sender.replaceTrack(newTrack);
 
-    // stop old
     localStream.current.getTracks().forEach(t => t.stop());
-
     localStream.current = newStream;
 
     if (localSmallRef.current) localSmallRef.current.srcObject = newStream;
-    if (localExpandedRef.current) localExpandedRef.current.srcObject = newStream;
-
-    socketRef.current.emit('peer-cam', { roomId, off: false });
-  }
-};
-
-  const switchCamera = async () => {
-  const newFacing = facingMode === 'user' ? 'environment' : 'user';
-  setFacingMode(newFacing);
-
-  const newStream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: newFacing },
-    audio: true
-  });
-
-  const newTrack = newStream.getVideoTracks()[0];
-  const sender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
-
-  if (sender) await sender.replaceTrack(newTrack);
-
-  localStream.current.getTracks().forEach(t => t.stop());
-  localStream.current = newStream;
-
-  if (localSmallRef.current) localSmallRef.current.srcObject = newStream;
-  if (localExpandedRef.current) localExpandedRef.current.srcObject = newStream;
-};
+  };
 
   const toggleFlash = () => {
     setFlashOn(prev => {
@@ -204,13 +204,14 @@ export default function App() {
     socketRef.current?.disconnect();
     pcRef.current?.close();
     localStream.current?.getTracks().forEach(t => t.stop());
+    localStream.current = null;
     setStatus('idle');
     setRoomId('');
     setMessages([]);
     setChatOpen(false);
     setRemoteMuted(false);
     setRemoteCamOff(false);
-    setLocalExpanded(false);
+    // FIX 3: removed setLocalExpanded(false) — that state never existed
   };
 
   const openChat = () => {
@@ -227,9 +228,6 @@ export default function App() {
       {flashOn && (
         <div style={{ position: 'fixed', inset: 0, background: 'white', zIndex: 9999, opacity: 0.95, pointerEvents: 'none', transition: 'opacity 0.3s' }} />
       )}
-
-      {/* Expanded local video overlay */}
-      
 
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
@@ -289,12 +287,12 @@ export default function App() {
               </div>
             ) : (
               <video
-                  ref={isSwapped ? localSmallRef : remoteRef}
-                  autoPlay
-                  muted={isSwapped}
-                  playsInline
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
+                ref={isSwapped ? localSmallRef : remoteRef}
+                autoPlay
+                muted={isSwapped}
+                playsInline
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
             )}
 
             {/* Remote muted indicator */}
@@ -312,23 +310,21 @@ export default function App() {
               </div>
             )}
 
-            {/* Local video overlay — click to expand */}
-            {!localExpanded && (
-              <div onClick={() => setIsSwapped(prev => !prev)} style={{ position: 'absolute', bottom: 16, right: 16, borderRadius: 12, overflow: 'hidden', border: '2px solid rgba(255,255,255,0.2)', width: isMobile ? 90 : 180, aspectRatio: isMobile ? '9/16' : '16/9', cursor: 'pointer' }}>
-                {!camOn ? (
-                  <div style={{ width: '100%', height: '100%', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🚫</div>
-                ) : (
-                  <video
-                    ref={isSwapped ? remoteRef : localSmallRef}
-                    autoPlay
-                    muted={!isSwapped}
-                    playsInline
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                )}
-                <div style={{ position: 'absolute', bottom: 4, left: 6, fontSize: 10, color: 'rgba(255,255,255,0.7)', background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: 4 }}>You</div>
-              </div>
-            )}
+            {/* FIX 4: local video overlay — was bare parens (invalid JSX), now a proper fragment */}
+            <div onClick={() => setIsSwapped(prev => !prev)} style={{ position: 'absolute', bottom: 16, right: 16, borderRadius: 12, overflow: 'hidden', border: '2px solid rgba(255,255,255,0.2)', width: isMobile ? 90 : 180, aspectRatio: isMobile ? '9/16' : '16/9', cursor: 'pointer' }}>
+              {!camOn ? (
+                <div style={{ width: '100%', height: '100%', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🚫</div>
+              ) : (
+                <video
+                  ref={isSwapped ? remoteRef : localSmallRef}
+                  autoPlay
+                  muted={!isSwapped}
+                  playsInline
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              )}
+              <div style={{ position: 'absolute', bottom: 4, left: 6, fontSize: 10, color: 'rgba(255,255,255,0.7)', background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: 4 }}>You</div>
+            </div>
 
             {/* Live badge */}
             {status === 'connected' && (
