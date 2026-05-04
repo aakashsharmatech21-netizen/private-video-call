@@ -5,7 +5,7 @@ const SERVER = 'https://private-video-call.onrender.com';
 
 const ICE_SERVERS = {
   iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun.l.google.com:19302' }
   ]
 };
 
@@ -19,13 +19,12 @@ export default function App() {
 
   const socketRef = useRef(null);
   const pcRef = useRef(null);
-  const localSmallRef = useRef(null);
+  const localRef = useRef(null);
   const remoteRef = useRef(null);
   const localStream = useRef(null);
-
   const currentRoomId = useRef('');
 
-  // 🎥 Get media (ONLY ONCE)
+  // 🎥 get media once
   const getMedia = async () => {
     if (localStream.current) return localStream.current;
 
@@ -36,21 +35,21 @@ export default function App() {
 
     localStream.current = stream;
 
-    if (localSmallRef.current) {
-      localSmallRef.current.srcObject = stream;
-    }
+    if (localRef.current) localRef.current.srcObject = stream;
 
     return stream;
   };
 
-  // 🔗 Create peer
+  // 🔗 peer
   const createPeer = (stream) => {
     const pc = new RTCPeerConnection(ICE_SERVERS);
 
     stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
     pc.ontrack = (e) => {
-      remoteRef.current.srcObject = e.streams[0];
+      if (remoteRef.current) {
+        remoteRef.current.srcObject = e.streams[0];
+      }
     };
 
     pc.onicecandidate = (e) => {
@@ -65,7 +64,7 @@ export default function App() {
     return pc;
   };
 
-  // 🚪 Join room
+  // 🚪 join
   const joinRoom = async () => {
     const id = inputId.trim().toUpperCase();
     if (!id) return;
@@ -79,6 +78,8 @@ export default function App() {
     const stream = await getMedia();
 
     socket.emit('join-room', id);
+
+    socket.on('joined', () => setStatus('waiting'));
 
     socket.on('user-joined', async () => {
       const pc = createPeer(stream);
@@ -115,17 +116,14 @@ export default function App() {
     });
   };
 
-  // 🎤 Toggle mic
+  // 🎤 mic
   const toggleMic = () => {
     const newState = !micOn;
     setMicOn(newState);
-
-    localStream.current.getAudioTracks().forEach(t => {
-      t.enabled = newState;
-    });
+    localStream.current.getAudioTracks().forEach(t => t.enabled = newState);
   };
 
-  // 📷 Toggle camera (FIXED)
+  // 📷 cam FIXED
   const toggleCam = async () => {
     const newState = !camOn;
     setCamOn(newState);
@@ -144,13 +142,11 @@ export default function App() {
 
       localStream.current = newStream;
 
-      if (localSmallRef.current) {
-        localSmallRef.current.srcObject = newStream;
-      }
+      if (localRef.current) localRef.current.srcObject = newStream;
     }
   };
 
-  // 🔄 Flip camera (FIXED)
+  // 🔄 flip FIXED
   const switchCamera = async () => {
     const newStream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment' },
@@ -165,37 +161,31 @@ export default function App() {
     localStream.current.getTracks().forEach(t => t.stop());
     localStream.current = newStream;
 
-    if (localSmallRef.current) {
-      localSmallRef.current.srcObject = newStream;
-    }
+    if (localRef.current) localRef.current.srcObject = newStream;
   };
 
   const isMobile = window.innerWidth < 768;
 
   return (
-    <div style={{ padding: 20, background: '#000', minHeight: '100vh', color: '#fff' }}>
+    <div style={{ minHeight: '100vh', background: '#0a0a0f', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
 
       {status === 'idle' && (
-        <>
-          <input
-            value={inputId}
-            onChange={e => setInputId(e.target.value)}
-            placeholder="Room ID"
-          />
+        <div>
+          <input value={inputId} onChange={e => setInputId(e.target.value)} placeholder="Room ID" />
           <button onClick={joinRoom}>Join</button>
-        </>
+        </div>
       )}
 
-      {status === 'connected' && (
-        <div style={{ position: 'relative', width: '100%', maxWidth: 800 }}>
+      {(status === 'waiting' || status === 'connected') && (
+        <div style={{ position: 'relative', width: '100%', maxWidth: 900 }}>
 
           {/* MAIN VIDEO */}
           <video
-            ref={isSwapped ? localSmallRef : remoteRef}
+            ref={isSwapped ? localRef : remoteRef}
             autoPlay
             muted={isSwapped}
             playsInline
-            style={{ width: '100%', height: 400, objectFit: 'cover' }}
+            style={{ width: '100%', height: 500, objectFit: 'cover' }}
           />
 
           {/* SMALL VIDEO */}
@@ -203,14 +193,15 @@ export default function App() {
             onClick={() => setIsSwapped(prev => !prev)}
             style={{
               position: 'absolute',
-              bottom: 10,
-              right: 10,
-              width: isMobile ? 100 : 150,
-              cursor: 'pointer'
+              bottom: 16,
+              right: 16,
+              width: isMobile ? 100 : 180,
+              cursor: 'pointer',
+              border: '2px solid white'
             }}
           >
             <video
-              ref={isSwapped ? remoteRef : localSmallRef}
+              ref={isSwapped ? remoteRef : localRef}
               autoPlay
               muted={!isSwapped}
               playsInline
