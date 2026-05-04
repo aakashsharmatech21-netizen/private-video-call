@@ -52,6 +52,13 @@ io.on('connection', (socket) => {
   socket.on('ice-candidate', ({ roomId, candidate }) => {
     socket.to(roomId).emit('ice-candidate', candidate);
   });
+  socket.on('peer-mic', ({ roomId, muted }) => {
+  socket.to(roomId).emit('peer-mic', { muted });
+});
+
+socket.on('peer-cam', ({ roomId, off }) => {
+  socket.to(roomId).emit('peer-cam', { off });
+});
 
   socket.on('disconnect', () => {
     const roomId = socket.data.roomId;
