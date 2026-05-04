@@ -13,6 +13,7 @@ const ICE_SERVERS = {
 };
 
 export default function App() {
+  
   const [roomId, setRoomId] = useState('');
   const [inputId, setInputId] = useState('');
   const [status, setStatus] = useState('idle');
@@ -29,11 +30,13 @@ export default function App() {
   const [localExpanded, setLocalExpanded] = useState(false);
   const socketRef = useRef(null);
   const pcRef = useRef(null);
-  const localRef = useRef(null);
+  const localSmallRef = useRef(null);
+  const localExpandedRef = useRef(null);
   const remoteRef = useRef(null);
   const localStream = useRef(null);
   const messagesEndRef = useRef(null);
   const currentRoomId = useRef('');
+  
 
   const generateRoom = () => {
     const id = Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -49,7 +52,8 @@ export default function App() {
       audio: true
     });
     localStream.current = stream;
-    if (localRef.current) localRef.current.srcObject = stream;
+    if (localSmallRef.current) localSmallRef.current.srcObject = stream;
+    if (localExpandedRef.current) localExpandedRef.current.srcObject = stream;
     return stream;
   };
 
@@ -195,7 +199,7 @@ export default function App() {
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
         }}>
           <div style={{ width: isMobile ? '95vw' : '60vw', aspectRatio: '9/16', borderRadius: 20, overflow: 'hidden', position: 'relative' }}>
-            <video ref={localRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <video ref={localExpandedRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             <div style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(0,0,0,0.5)', borderRadius: 8, padding: '4px 10px', fontSize: 12 }}>Tap to close</div>
           </div>
         </div>
@@ -284,7 +288,7 @@ export default function App() {
                 {!camOn ? (
                   <div style={{ width: '100%', height: '100%', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🚫</div>
                 ) : (
-                  <video ref={localRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <video ref={localSmallRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 )}
                 <div style={{ position: 'absolute', bottom: 4, left: 6, fontSize: 10, color: 'rgba(255,255,255,0.7)', background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: 4 }}>You</div>
               </div>
